@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>CDS Inventory</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --line:#252a34; --text:#e8eaed; --muted:#9aa3b2;
+    --accent:#3ddc84; --accent2:#2b6cff; --danger:#ff5d5d; --warn:#ffb020;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);-webkit-text-size-adjust:100%}
+  header{position:sticky;top:0;background:#0f1115ee;backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;
+    justify-content:space-between;z-index:10}
+  header h1{font-size:16px;margin:0;letter-spacing:.5px}
+  header .who{font-size:12px;color:var(--muted)}
+  main{padding:16px;max-width:560px;margin:0 auto}
+  .tabs{display:flex;gap:6px;margin:0 auto 14px;max-width:560px;padding:0 16px}
+  .tabs button{flex:1;padding:10px 0;background:var(--card);color:var(--muted);border:1px solid var(--line);
+    border-radius:10px;font-size:13px;font-weight:600}
+  .tabs button.active{color:var(--text);border-color:var(--accent);background:#10241a}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:12px;background:#0d0f14;border:1px solid var(--line);
+    border-radius:10px;color:var(--text);font-size:16px}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent2)}
+  button.go{width:100%;margin-top:16px;padding:14px;border:none;border-radius:12px;font-size:16px;font-weight:700}
+  .primary{background:var(--accent);color:#06210f}
+  .secondary{background:var(--accent2);color:#fff}
+  .ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .row{display:flex;gap:10px}.row>*{flex:1}
+  .scanbtn{margin-top:6px;background:transparent;border:1px dashed var(--line);color:var(--accent);
+    width:100%;padding:10px;border-radius:10px;font-size:13px}
+  #reader{margin-top:10px;border-radius:10px;overflow:hidden}
+  .msg{margin-top:12px;font-size:13px;padding:10px 12px;border-radius:10px;display:none}
+  .msg.ok{background:#10241a;color:var(--accent);display:block}
+  .msg.err{background:#2a1414;color:var(--danger);display:block}
+  .big{font-size:13px;color:var(--muted)}
+  .result h2{margin:0 0 2px;font-size:22px}
+  .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .kv:last-child{border-bottom:none}
+  .kv span:first-child{color:var(--muted)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+    background:#10241a;color:var(--accent)}
+  .assigned{font-size:28px;font-weight:800;letter-spacing:1px;color:var(--accent);text-align:center;margin:6px 0}
+  .activity{font-size:13px}
+  .activity .item{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
+  .activity .t{color:var(--muted);font-size:11px}
+  .hint{font-size:11px;color:var(--muted);margin-top:6px}
+  .center{text-align:center}
+  .logo{color:var(--accent);font-weight:800}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="logo">CDS</span> INVENTORY</h1>
+  <div class="who" id="who"></div>
+</header>
+
+<!-- LOGIN -->
+<main id="loginView">
+  <div class="card">
+    <div class="center big" style="margin-bottom:8px">Sign in to the floor app</div>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="username" inputmode="email" />
+    <label>Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button class="go primary" onclick="signIn()">Sign in</button>
+    <div id="loginMsg" class="msg"></div>
+  </div>
+</main>
+
+<!-- APP -->
+<div id="appView" style="display:none">
+  <div class="tabs">
+    <button data-tab="lookup" class="active" onclick="tab('lookup')">Lookup</button>
+    <button data-tab="count" onclick="tab('count')">Count</button>
+    <button data-tab="receive" onclick="tab('receive')">Receive</button>
+    <button data-tab="issue" onclick="tab('issue')">Issue</button>
+    <button data-tab="activity" onclick="tab('activity')">Activity</button>
+  </div>
+  <main>
+
+    <!-- LOOKUP -->
+    <section id="lookup">
+      <div class="card">
+        <label>Roll ID</label>
+        <input id="lk_id" placeholder="R000123" autocapitalize="characters" />
+        <button class="scanbtn" onclick="startScan('lk_id')">📷 Scan QR</button>
+        <button class="go primary" onclick="lookup()">Find roll</button>
+        <div id="lk_msg" class="msg"></div>
+      </div>
+      <div id="lk_result"></div>
+    </section>
+
+    <!-- COUNT / INTAKE (pre-printed labels) -->
+    <section id="count" style="display:none">
+      <div class="card">
+        <div class="big" style="margin-bottom:6px">Count / intake — scan a pre-printed roll label, then record it</div>
+        <button class="go primary" onclick="startScan('ct_id')">📷 Scan roll label</button>
+        <label>Roll ID (from the label)</label>
+        <input id="ct_id" placeholder="R000501" autocapitalize="characters" />
+        <label>Style / Fabric *</label>
+        <input id="ct_style" placeholder="e.g. Coyote 500D Cordura" />
+        <div class="row">
+          <div><label>Color</label><input id="ct_color" /></div>
+          <div><label>Lot / shade</label><input id="ct_lot" /></div>
+        </div>
+        <div class="row">
+          <div><label>Width (in)</label><input id="ct_width" type="number" inputmode="decimal" /></div>
+          <div><label>Measured yards *</label><input id="ct_yards" type="number" inputmode="decimal" /></div>
+        </div>
+        <label>Owner *</label>
+        <select id="ct_owner"></select>
+        <label>Spot * <span class="hint">— stays set so you can run a whole shelf</span></label>
+        <input id="ct_loc" list="locs" placeholder="WEST-R04-S2" autocapitalize="characters" />
+        <button class="scanbtn" onclick="startScan('ct_loc')">📷 Scan spot</button>
+        <label>Vendor tag (reference)</label>
+        <input id="ct_vtag" />
+        <button class="go primary" onclick="intake()">Save &amp; next roll</button>
+        <div id="ct_msg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- RECEIVE -->
+    <section id="receive" style="display:none">
+      <div class="card">
+        <div class="big" style="margin-bottom:4px">Receive a new fabric roll</div>
+        <label>Style / Fabric *</label>
+        <input id="rc_style" placeholder="e.g. Coyote 500D Cordura" />
+        <div class="row">
+          <div><label>Color</label><input id="rc_color" /></div>
+          <div><label>Lot / shade</label><input id="rc_lot" /></div>
+        </div>
+        <div class="row">
+          <div><label>Width (in)</label><input id="rc_width" type="number" inputmode="decimal" /></div>
+          <div><label>Measured yards *</label><input id="rc_yards" type="number" inputmode="decimal" /></div>
+        </div>
+        <label>Owner *</label>
+        <select id="rc_owner"></select>
+        <label>Location *</label>
+        <input id="rc_loc" list="locs" placeholder="e.g. A-12-3" autocapitalize="characters" />
+        <datalist id="locs"></datalist>
+        <label>Vendor tag (reference)</label>
+        <input id="rc_vtag" />
+        <button class="go primary" onclick="receive()">Receive roll</button>
+        <div id="rc_msg" class="msg"></div>
+        <div id="rc_assigned"></div>
+      </div>
+    </section>
+
+    <!-- ISSUE -->
+    <section id="issue" style="display:none">
+      <div class="card">
+        <div class="big" style="margin-bottom:4px">Issue fabric to a work order</div>
+        <label>Roll ID *</label>
+        <input id="is_id" placeholder="R000123" autocapitalize="characters" />
+        <button class="scanbtn" onclick="startScan('is_id')">📷 Scan QR</button>
+        <div class="row">
+          <div><label>Yards used *</label><input id="is_yards" type="number" inputmode="decimal" /></div>
+          <div><label>WO #</label><input id="is_wo" placeholder="WO260097" /></div>
+        </div>
+        <label>Note</label>
+        <input id="is_note" />
+        <button class="go secondary" onclick="issue()">Issue to WO</button>
+        <div id="is_msg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section id="activity" style="display:none">
+      <div class="card">
+        <div class="big" style="margin-bottom:8px">Recent movements</div>
+        <div id="act_list" class="activity"></div>
+        <button class="go ghost" onclick="loadActivity()">Refresh</button>
+      </div>
+    </section>
+
+    <div id="reader"></div>
+    <button class="go ghost" style="margin-top:6px" onclick="signOut()">Sign out</button>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+// ---- CONFIG (anon public key — safe in front-end; RLS protects data) ----
+const SUPABASE_URL = 'https://ejaoshnqlxqtqjwciivi.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqYW9zaG5xbHhxdHFqd2NpaXZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTIzMjMsImV4cCI6MjA5NzI4ODMyM30.FbwjofxLhRzjPOFprJhG5rjvUNwBOppCn-iqbfeblrE';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function $(id){return document.getElementById(id)}
+function show(el,type,text){el.className='msg '+type;el.textContent=text;el.style.display='block'}
+function clearMsg(el){el.style.display='none';el.textContent=''}
+
+// ---- AUTH ----
+async function signIn(){
+  clearMsg($('loginMsg'));
+  const {error} = await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+  if(error){show($('loginMsg'),'err',error.message);return}
+  boot();
+}
+async function signOut(){await sb.auth.signOut();location.reload()}
+
+async function boot(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session){$('loginView').style.display='block';$('appView').style.display='none';return}
+  $('loginView').style.display='none';$('appView').style.display='block';
+  $('who').textContent = session.user.email;
+  await loadOwners(); await loadLocations(); await loadActivity();
+}
+
+// ---- TABS ----
+function tab(name){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+  ['lookup','count','receive','issue','activity'].forEach(s=>$(s).style.display = s===name?'block':'none');
+  stopScan();
+}
+
+// ---- REFERENCE DATA ----
+async function loadOwners(){
+  const {data} = await sb.from('owners').select('owner_id,name').order('name');
+  ['rc_owner','ct_owner'].forEach(selId=>{
+    const sel=$(selId); if(!sel) return; sel.innerHTML='';
+    (data||[]).forEach(o=>{const op=document.createElement('option');op.value=o.owner_id;op.textContent=o.name;
+      if(/duckworth/i.test(o.name)) op.selected=true; sel.appendChild(op)});
+  });
+}
+async function loadLocations(){
+  const {data} = await sb.from('locations').select('location_code').order('location_code');
+  const dl=$('locs');dl.innerHTML='';
+  (data||[]).forEach(l=>{const op=document.createElement('option');op.value=l.location_code;dl.appendChild(op)});
+}
+
+// ---- LOOKUP ----
+async function lookup(){
+  clearMsg($('lk_msg'));$('lk_result').innerHTML='';
+  const id=$('lk_id').value.trim().toUpperCase();
+  if(!id){show($('lk_msg'),'err','Enter or scan a roll ID');return}
+  const {data:roll,error} = await sb.from('rolls')
+    .select('*, owners(name), pallets(location_code)').eq('roll_id',id).maybeSingle();
+  if(error){show($('lk_msg'),'err',error.message);return}
+  if(!roll){show($('lk_msg'),'err','No roll '+id+' found');return}
+  const {data:oh} = await sb.from('roll_onhand').select('yards_on_hand').eq('roll_id',id).maybeSingle();
+  const {data:loc} = await sb.from('movements').select('to_location,occurred_at')
+    .eq('roll_id',id).not('to_location','is',null).order('occurred_at',{ascending:false}).limit(1);
+  const where = (loc&&loc[0]&&loc[0].to_location) || (roll.pallets&&roll.pallets.location_code) || '—';
+  $('lk_result').innerHTML =
+    '<div class="card result">'+
+    '<h2>'+roll.roll_id+'</h2>'+
+    '<div class="big" style="margin-bottom:10px">'+(roll.style_fabric||'')+
+      (roll.color?(' · '+roll.color):'')+'</div>'+
+    kv('Location',where)+
+    kv('Yards on hand',(oh?oh.yards_on_hand:'?')+' yd')+
+    kv('Lot / shade',roll.lot||'—')+
+    kv('Width',roll.width_in?roll.width_in+' in':'—')+
+    kv('Owner',roll.owners?roll.owners.name:'—')+
+    kv('Status','<span class="pill">'+roll.status+'</span>')+
+    '</div>';
+}
+function kv(k,v){return '<div class="kv"><span>'+k+'</span><span>'+v+'</span></div>'}
+
+// ---- RECEIVE ----
+async function receive(){
+  clearMsg($('rc_msg'));$('rc_assigned').innerHTML='';
+  const style=$('rc_style').value.trim();
+  const yards=parseFloat($('rc_yards').value);
+  const ownerId=$('rc_owner').value;
+  const locCode=$('rc_loc').value.trim().toUpperCase();
+  if(!style||!yards||!ownerId||!locCode){show($('rc_msg'),'err','Style, yards, owner and location are required');return}
+  // ensure location exists
+  await sb.from('locations').upsert({location_code:locCode},{onConflict:'location_code',ignoreDuplicates:true});
+  // insert roll
+  const {data:roll,error:e1} = await sb.from('rolls').insert({
+    style_fabric:style, color:$('rc_color').value.trim()||null, lot:$('rc_lot').value.trim()||null,
+    width_in:parseFloat($('rc_width').value)||null, vendor_tag:$('rc_vtag').value.trim()||null,
+    owner_id:ownerId
+  }).select('roll_id').single();
+  if(e1){show($('rc_msg'),'err',e1.message);return}
+  // RECEIVE movement
+  const {error:e2} = await sb.from('movements').insert({
+    item_kind:'ROLL', roll_id:roll.roll_id, type:'RECEIVE', qty_delta:yards, to_location:locCode,
+    note:'Received via app'
+  });
+  if(e2){show($('rc_msg'),'err','Roll created but movement failed: '+e2.message);return}
+  show($('rc_msg'),'ok','Received '+yards+' yd at '+locCode);
+  $('rc_assigned').innerHTML='<div class="big center" style="margin-top:14px">Label this roll:</div>'+
+    '<div class="assigned">'+roll.roll_id+'</div>';
+  ['rc_style','rc_color','rc_lot','rc_width','rc_yards','rc_vtag'].forEach(i=>$(i).value='');
+  await loadLocations(); await loadActivity();
+}
+
+// ---- COUNT / INTAKE (pre-printed label -> full record) ----
+async function intake(){
+  clearMsg($('ct_msg'));
+  const id=$('ct_id').value.trim().toUpperCase();
+  const style=$('ct_style').value.trim();
+  const yards=parseFloat($('ct_yards').value);
+  const ownerId=$('ct_owner').value;
+  const locCode=$('ct_loc').value.trim().toUpperCase();
+  if(!id){show($('ct_msg'),'err','Scan or enter the roll label ID first');return}
+  if(!/^R\d+$/.test(id)){show($('ct_msg'),'err','Roll ID should look like R000501');return}
+  if(!style||!yards||!ownerId||!locCode){show($('ct_msg'),'err','Style, yards, owner and spot are required');return}
+  // don't double-enter a label
+  const {data:exists} = await sb.from('rolls').select('roll_id').eq('roll_id',id).maybeSingle();
+  if(exists){show($('ct_msg'),'err',id+' is already in the system — grab a fresh label.');return}
+  await sb.from('locations').upsert({location_code:locCode},{onConflict:'location_code',ignoreDuplicates:true});
+  const {error:e1} = await sb.from('rolls').insert({
+    roll_id:id, style_fabric:style, color:$('ct_color').value.trim()||null, lot:$('ct_lot').value.trim()||null,
+    width_in:parseFloat($('ct_width').value)||null, vendor_tag:$('ct_vtag').value.trim()||null, owner_id:ownerId
+  });
+  if(e1){show($('ct_msg'),'err',e1.message);return}
+  const {error:e2} = await sb.from('movements').insert({
+    item_kind:'ROLL', roll_id:id, type:'RECEIVE', qty_delta:yards, to_location:locCode, note:'Floor count intake'
+  });
+  if(e2){show($('ct_msg'),'err','Roll saved but movement failed: '+e2.message);return}
+  show($('ct_msg'),'ok','✓ '+id+' — '+yards+' yd at '+locCode+'. Scan the next roll.');
+  // keep owner + spot sticky for the rest of the shelf; clear the per-roll fields
+  ['ct_id','ct_style','ct_color','ct_lot','ct_width','ct_yards','ct_vtag'].forEach(i=>$(i).value='');
+  $('ct_id').focus();
+  await loadLocations(); await loadActivity();
+}
+
+// ---- ISSUE ----
+async function issue(){
+  clearMsg($('is_msg'));
+  const id=$('is_id').value.trim().toUpperCase();
+  const yards=parseFloat($('is_yards').value);
+  if(!id||!yards){show($('is_msg'),'err','Roll ID and yards are required');return}
+  const {data:roll} = await sb.from('rolls').select('roll_id').eq('roll_id',id).maybeSingle();
+  if(!roll){show($('is_msg'),'err','No roll '+id+' found');return}
+  const {error} = await sb.from('movements').insert({
+    item_kind:'ROLL', roll_id:id, type:'ISSUE', qty_delta:-Math.abs(yards),
+    wo_number:$('is_wo').value.trim()||null, note:$('is_note').value.trim()||null
+  });
+  if(error){show($('is_msg'),'err',error.message);return}
+  const {data:oh} = await sb.from('roll_onhand').select('yards_on_hand').eq('roll_id',id).maybeSingle();
+  show($('is_msg'),'ok','Issued '+yards+' yd. '+id+' now at '+(oh?oh.yards_on_hand:'?')+' yd.');
+  ['is_yards','is_wo','is_note'].forEach(i=>$(i).value='');
+  await loadActivity();
+}
+
+// ---- ACTIVITY ----
+async function loadActivity(){
+  const {data} = await sb.from('movements')
+    .select('movement_id,occurred_at,item_kind,roll_id,trim_id,type,qty_delta,wo_number')
+    .order('occurred_at',{ascending:false}).limit(25);
+  const wrap=$('act_list');wrap.innerHTML='';
+  if(!data||!data.length){wrap.innerHTML='<div class="big">No movements yet.</div>';return}
+  data.forEach(m=>{
+    const item=m.roll_id||m.trim_id||'';
+    const q=(m.qty_delta>0?'+':'')+m.qty_delta;
+    const t=new Date(m.occurred_at).toLocaleString();
+    wrap.innerHTML+='<div class="item"><div><b>'+m.type+'</b> '+item+
+      (m.wo_number?(' · '+m.wo_number):'')+'<div class="t">'+t+'</div></div>'+
+      '<div>'+q+'</div></div>';
+  });
+}
+
+// ---- QR SCAN ----
+let qr=null, scanTarget=null;
+async function startScan(targetId){
+  scanTarget=targetId;
+  const box=$('reader');
+  try{
+    if(!qr) qr=new Html5Qrcode("reader");
+    await qr.start({facingMode:"environment"},{fps:10,qrbox:220},
+      txt=>{ $(scanTarget).value=String(txt).trim().toUpperCase(); stopScan(); },
+      ()=>{});
+  }catch(e){ alert("Camera unavailable. The app must be served over HTTPS for the camera to work (see deploy notes). Type the ID instead."); }
+}
+async function stopScan(){
+  if(qr){ try{await qr.stop(); qr.clear();}catch(e){} }
+}
+
+// ---- start ----
+sb.auth.getSession().then(boot);
+</script>
+</body>
+</html>

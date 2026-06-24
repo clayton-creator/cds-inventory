@@ -104,10 +104,11 @@
         <button class="go primary" onclick="startScan('ct_id')">📷 Scan roll label</button>
         <label>Roll ID (from the label)</label>
         <input id="ct_id" placeholder="R000501" autocapitalize="characters" />
-        <label>Style / Fabric *</label>
-        <input id="ct_style" placeholder="e.g. Coyote 500D Cordura" />
+        <label>Fabric *</label>
+        <select id="ct_style_sel" onchange="fabricChange('ct')"></select>
+        <input id="ct_style" placeholder="Type the fabric" style="display:none;margin-top:6px" />
         <div class="row">
-          <div><label>Color</label><input id="ct_color" /></div>
+          <div><label>Color</label><input id="ct_color" list="colors" /></div>
           <div><label>Lot / shade</label><input id="ct_lot" /></div>
         </div>
         <div class="row">
@@ -130,10 +131,11 @@
     <section id="receive" style="display:none">
       <div class="card">
         <div class="big" style="margin-bottom:4px">Receive a new fabric roll</div>
-        <label>Style / Fabric *</label>
-        <input id="rc_style" placeholder="e.g. Coyote 500D Cordura" />
+        <label>Fabric *</label>
+        <select id="rc_style_sel" onchange="fabricChange('rc')"></select>
+        <input id="rc_style" placeholder="Type the fabric" style="display:none;margin-top:6px" />
         <div class="row">
-          <div><label>Color</label><input id="rc_color" /></div>
+          <div><label>Color</label><input id="rc_color" list="colors" /></div>
           <div><label>Lot / shade</label><input id="rc_lot" /></div>
         </div>
         <div class="row">
@@ -143,8 +145,9 @@
         <label>Owner *</label>
         <select id="rc_owner"></select>
         <label>Location *</label>
-        <input id="rc_loc" list="locs" placeholder="e.g. A-12-3" autocapitalize="characters" />
+        <input id="rc_loc" list="locs" placeholder="e.g. BO-R04-S2" autocapitalize="characters" />
         <datalist id="locs"></datalist>
+        <datalist id="colors"></datalist>
         <label>Vendor tag (reference)</label>
         <input id="rc_vtag" />
         <button class="go primary" onclick="receive()">Receive roll</button>
@@ -193,6 +196,41 @@ const SUPABASE_URL = 'https://ejaoshnqlxqtqjwciivi.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqYW9zaG5xbHhxdHFqd2NpaXZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTIzMjMsImV4cCI6MjA5NzI4ODMyM30.FbwjofxLhRzjPOFprJhG5rjvUNwBOppCn-iqbfeblrE';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ---- PICKLISTS (Basement Outside; extend as new areas are counted) ----
+const FABRICS = [
+  {group:'Duckworth (merino)', items:['Vapor','Powder','Comet','Polaris','Maverick']},
+  {group:'DLA Troop Support (CWC)', items:['CWC Self / shell','CWC Polyester velour fleece','CWC Interfacing']}
+];
+const COLORS = ['Charcoal','Spruce','Midnight','Standard Gray','Moose','Coyote','Sagebrush','Coffee','Black','Dark Olive','Granite','Denim'];
+
+function buildFabricPickers(){
+  ['ct_style_sel','rc_style_sel'].forEach(id=>{
+    const sel=document.getElementById(id); if(!sel) return; sel.innerHTML='';
+    const ph=document.createElement('option'); ph.value=''; ph.textContent='— Fabric —'; sel.appendChild(ph);
+    FABRICS.forEach(g=>{
+      const og=document.createElement('optgroup'); og.label=g.group;
+      g.items.forEach(it=>{const o=document.createElement('option');o.value=it;o.textContent=it;og.appendChild(o)});
+      sel.appendChild(og);
+    });
+    const ot=document.createElement('option'); ot.value='__other__'; ot.textContent='Other (type in)…'; sel.appendChild(ot);
+  });
+}
+function buildColors(){
+  const dl=document.getElementById('colors'); if(!dl) return; dl.innerHTML='';
+  COLORS.forEach(c=>{const o=document.createElement('option');o.value=c;dl.appendChild(o)});
+}
+// fabric <select> drives the hidden text input that intake()/receive() read
+function fabricChange(p){
+  const v=document.getElementById(p+'_style_sel').value;
+  const t=document.getElementById(p+'_style');
+  if(v==='__other__'){ t.style.display='block'; t.value=''; t.focus(); }
+  else { t.style.display='none'; t.value=v; }
+}
+function resetFabric(p){
+  const sel=document.getElementById(p+'_style_sel'); if(sel) sel.value='';
+  const t=document.getElementById(p+'_style'); if(t){ t.style.display='none'; t.value=''; }
+}
+
 function $(id){return document.getElementById(id)}
 function show(el,type,text){el.className='msg '+type;el.textContent=text;el.style.display='block'}
 function clearMsg(el){el.style.display='none';el.textContent=''}
@@ -211,6 +249,7 @@ async function boot(){
   if(!session){$('loginView').style.display='block';$('appView').style.display='none';return}
   $('loginView').style.display='none';$('appView').style.display='block';
   $('who').textContent = session.user.email;
+  buildFabricPickers(); buildColors();
   await loadOwners(); await loadLocations(); await loadActivity();
 }
 
@@ -291,6 +330,7 @@ async function receive(){
   $('rc_assigned').innerHTML='<div class="big center" style="margin-top:14px">Label this roll:</div>'+
     '<div class="assigned">'+roll.roll_id+'</div>';
   ['rc_style','rc_color','rc_lot','rc_width','rc_yards','rc_vtag'].forEach(i=>$(i).value='');
+  resetFabric('rc');
   await loadLocations(); await loadActivity();
 }
 
@@ -321,6 +361,7 @@ async function intake(){
   show($('ct_msg'),'ok','✓ '+id+' — '+yards+' yd at '+locCode+'. Scan the next roll.');
   // keep owner + spot sticky for the rest of the shelf; clear the per-roll fields
   ['ct_id','ct_style','ct_color','ct_lot','ct_width','ct_yards','ct_vtag'].forEach(i=>$(i).value='');
+  resetFabric('ct');
   $('ct_id').focus();
   await loadLocations(); await loadActivity();
 }

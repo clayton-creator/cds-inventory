@@ -19,8 +19,8 @@
   header h1{font-size:16px;margin:0;letter-spacing:.5px}
   header .who{font-size:12px;color:var(--muted)}
   main{padding:16px;max-width:560px;margin:0 auto}
-  .tabs{display:flex;gap:6px;margin:0 auto 14px;max-width:560px;padding:0 16px}
-  .tabs button{flex:1;padding:10px 0;background:var(--card);color:var(--muted);border:1px solid var(--line);
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 auto 14px;max-width:560px;padding:0 16px}
+  .tabs button{flex:1 1 64px;padding:10px 0;background:var(--card);color:var(--muted);border:1px solid var(--line);
     border-radius:10px;font-size:13px;font-weight:600}
   .tabs button.active{color:var(--text);border-color:var(--accent);background:#10241a}
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
@@ -53,6 +53,14 @@
   .hint{font-size:11px;color:var(--muted);margin-top:6px}
   .center{text-align:center}
   .logo{color:var(--accent);font-weight:800}
+  .msg.dry{background:#2a2412;color:var(--warn);display:block}
+  .colgrid{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .colgrid button{flex:1;min-width:38px;padding:16px 0;background:#0d0f14;border:1px solid var(--line);
+    border-radius:10px;color:var(--text);font-size:18px;font-weight:800}
+  .colgrid button.sel{border-color:var(--accent);background:#10241a;color:var(--accent)}
+  .destbig{font-size:26px;font-weight:800;text-align:center;color:var(--accent);margin:10px 0 2px;letter-spacing:1px}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--warn);margin-top:4px}
+  .toggle input{width:auto}
 </style>
 </head>
 <body>
@@ -79,6 +87,9 @@
   <div class="tabs">
     <button data-tab="lookup" class="active" onclick="tab('lookup')">Lookup</button>
     <button data-tab="count" onclick="tab('count')">Count</button>
+    <button data-tab="grid" onclick="tab('grid')">Grid</button>
+    <button data-tab="place" onclick="tab('place')">Place</button>
+    <button data-tab="load" onclick="tab('load')">Load</button>
     <button data-tab="receive" onclick="tab('receive')">Receive</button>
     <button data-tab="issue" onclick="tab('issue')">Issue</button>
     <button data-tab="activity" onclick="tab('activity')">Activity</button>
@@ -124,6 +135,90 @@
         <input id="ct_vtag" />
         <button class="go primary" onclick="intake()">Save &amp; next roll</button>
         <div id="ct_msg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- GRID (pass 1: create the location codes for an area) -->
+    <section id="grid" style="display:none">
+      <div class="card">
+        <div class="big" style="margin-bottom:6px">Grid setup — create the location codes for an area. Do this once, after the row/column signs are up.</div>
+        <div class="row">
+          <div><label>Area</label><input id="gd_area" value="BO" autocapitalize="characters" oninput="gridPreview()" /></div>
+          <div><label>Rows</label><input id="gd_rows" type="number" value="9" oninput="gridPreview()" /></div>
+          <div><label>Columns (A–…)</label><input id="gd_cols" type="number" value="7" oninput="gridPreview()" /></div>
+        </div>
+        <div class="hint" id="gd_preview"></div>
+        <label class="toggle"><input type="checkbox" id="gd_dry" checked> Dry run (preview only — nothing is saved)</label>
+        <button class="go primary" onclick="seedGrid()">Create locations</button>
+        <div id="gd_msg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- PLACE (pass 2: create or move a pallet to a row+column spot) -->
+    <section id="place" style="display:none">
+      <div class="card">
+        <div class="big" style="margin-bottom:6px">Place a pallet — scan the pallet, scan the row sign, tap the column. Creates a new pallet here, or moves an existing one.</div>
+
+        <label>Pallet *</label>
+        <input id="pl_pallet" placeholder="P00012" autocapitalize="characters" oninput="loadPallet()" />
+        <button class="scanbtn" onclick="startScan('pl_pallet')">📷 Scan pallet</button>
+        <div id="pl_contents"></div>
+        <label>Owner <span class="hint">— used only when creating a new pallet</span></label>
+        <select id="pl_owner"></select>
+
+        <label style="margin-top:12px">Row * <span class="hint">— scan the hanging row sign</span></label>
+        <input id="pl_row" placeholder="BO-R3" autocapitalize="characters" oninput="updateDest()" />
+        <button class="scanbtn" onclick="startScan('pl_row')">📷 Scan row sign</button>
+
+        <label style="margin-top:12px">Column *</label>
+        <div class="colgrid" id="pl_colgrid">
+          <button type="button" onclick="pickCol('A')">A</button>
+          <button type="button" onclick="pickCol('B')">B</button>
+          <button type="button" onclick="pickCol('C')">C</button>
+          <button type="button" onclick="pickCol('D')">D</button>
+          <button type="button" onclick="pickCol('E')">E</button>
+          <button type="button" onclick="pickCol('F')">F</button>
+          <button type="button" onclick="pickCol('G')">G</button>
+        </div>
+
+        <div class="destbig" id="pl_dest">—</div>
+
+        <label class="toggle"><input type="checkbox" id="pl_dry" checked> Dry run (preview only — nothing is saved)</label>
+        <button class="go primary" onclick="placement()">Place pallet</button>
+        <div id="pl_msg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- LOAD (pass 3: put rolls onto a pallet) -->
+    <section id="load" style="display:none">
+      <div class="card">
+        <div class="big" style="margin-bottom:6px">Load rolls onto a pallet — scan the pallet, then scan each roll sitting on it.</div>
+        <label>Pallet *</label>
+        <input id="ld_pallet" placeholder="P00012" autocapitalize="characters" oninput="loadPalletInfo()" />
+        <button class="scanbtn" onclick="startScan('ld_pallet')">📷 Scan pallet</button>
+        <div id="ld_info"></div>
+
+        <label style="margin-top:14px">Roll ID (from the label)</label>
+        <input id="ld_id" placeholder="R000501" autocapitalize="characters" />
+        <button class="scanbtn" onclick="startScan('ld_id')">📷 Scan roll label</button>
+        <label>Fabric *</label>
+        <select id="ld_style_sel" onchange="fabricChange('ld')"></select>
+        <input id="ld_style" placeholder="Type the fabric" style="display:none;margin-top:6px" />
+        <div class="row">
+          <div><label>Color</label><input id="ld_color" list="colors" /></div>
+          <div><label>Lot / shade</label><input id="ld_lot" /></div>
+        </div>
+        <div class="row">
+          <div><label>Width (in)</label><input id="ld_width" type="number" inputmode="decimal" /></div>
+          <div><label>Measured yards *</label><input id="ld_yards" type="number" inputmode="decimal" /></div>
+        </div>
+        <label>Owner *</label>
+        <select id="ld_owner"></select>
+        <label>Vendor tag (reference)</label>
+        <input id="ld_vtag" />
+        <label class="toggle"><input type="checkbox" id="ld_dry" checked> Dry run (preview only — nothing is saved)</label>
+        <button class="go primary" onclick="loadRoll()">Save roll &amp; next</button>
+        <div id="ld_msg" class="msg"></div>
       </div>
     </section>
 
@@ -201,10 +296,17 @@ const FABRICS = [
   {group:'Duckworth (merino)', items:['Vapor','Powder','Comet','Polaris','Maverick']},
   {group:'DLA Troop Support (CWC)', items:['CWC Self / shell','CWC Polyester velour fleece','CWC Interfacing']}
 ];
+// Standard cuttable width (in) per fabric type — source: Production Master SOW "Fabric Rules" tab.
+// Width is standardized per fabric type, so it auto-fills on fabric select (still editable).
+// Only fabrics with a known standard are listed; Maverick + CWC velour fleece have no width on file yet.
+const FABRIC_WIDTH = {
+  'Vapor':59, 'Powder':55, 'Comet':51, 'Polaris':56,
+  'CWC Self / shell':56, 'CWC Interfacing':58
+};
 const COLORS = ['Charcoal','Spruce','Midnight','Standard Gray','Moose','Coyote','Sagebrush','Coffee','Black','Dark Olive','Granite','Denim'];
 
 function buildFabricPickers(){
-  ['ct_style_sel','rc_style_sel'].forEach(id=>{
+  ['ct_style_sel','rc_style_sel','ld_style_sel'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return; sel.innerHTML='';
     const ph=document.createElement('option'); ph.value=''; ph.textContent='— Fabric —'; sel.appendChild(ph);
     FABRICS.forEach(g=>{
@@ -225,6 +327,9 @@ function fabricChange(p){
   const t=document.getElementById(p+'_style');
   if(v==='__other__'){ t.style.display='block'; t.value=''; t.focus(); }
   else { t.style.display='none'; t.value=v; }
+  // auto-fill standard cuttable width for the fabric type (editable; blank if no standard on file)
+  const w=document.getElementById(p+'_width');
+  if(w){ w.value = (v && FABRIC_WIDTH[v]!=null) ? FABRIC_WIDTH[v] : ''; }
 }
 function resetFabric(p){
   const sel=document.getElementById(p+'_style_sel'); if(sel) sel.value='';
@@ -256,14 +361,14 @@ async function boot(){
 // ---- TABS ----
 function tab(name){
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['lookup','count','receive','issue','activity'].forEach(s=>$(s).style.display = s===name?'block':'none');
+  ['lookup','count','grid','place','load','receive','issue','activity'].forEach(s=>$(s).style.display = s===name?'block':'none');
   stopScan();
 }
 
 // ---- REFERENCE DATA ----
 async function loadOwners(){
   const {data} = await sb.from('owners').select('owner_id,name').order('name');
-  ['rc_owner','ct_owner'].forEach(selId=>{
+  ['rc_owner','ct_owner','pl_owner','ld_owner'].forEach(selId=>{
     const sel=$(selId); if(!sel) return; sel.innerHTML='';
     (data||[]).forEach(o=>{const op=document.createElement('option');op.value=o.owner_id;op.textContent=o.name;
       if(/duckworth/i.test(o.name)) op.selected=true; sel.appendChild(op)});
@@ -366,6 +471,166 @@ async function intake(){
   await loadLocations(); await loadActivity();
 }
 
+// ---- PLACE (move a pallet to a row+column spot) ----
+let plCol=null;
+function pickCol(c){
+  plCol=c;
+  document.querySelectorAll('#pl_colgrid button').forEach(b=>b.classList.toggle('sel',b.textContent===c));
+  updateDest();
+}
+function updateDest(){
+  const row=$('pl_row').value.trim().toUpperCase();
+  $('pl_dest').textContent = (row&&plCol) ? (row+'-'+plCol) : (row||'—');
+}
+async function loadPallet(){
+  const id=$('pl_pallet').value.trim().toUpperCase();
+  const box=$('pl_contents'); box.innerHTML='';
+  if(!/^P\d+$/.test(id)) return;
+  const {data:p} = await sb.from('pallets')
+    .select('pallet_id,location_code,status,owner_id,owners(name)').eq('pallet_id',id).maybeSingle();
+  if(!p){ box.innerHTML='<div class="hint" style="color:var(--warn)">New pallet — '+id+' will be created at the spot you pick. Set the owner below.</div>'; return; }
+  const {data:rolls} = await sb.from('rolls').select('roll_id,style_fabric,color').eq('pallet_id',id);
+  const n=(rolls||[]).length;
+  box.innerHTML =
+    kv('Currently at', p.location_code||'—') +
+    kv('Owner', p.owners?p.owners.name:'—') +
+    kv('On it', n+' roll'+(n!==1?'s':'')) +
+    (rolls||[]).slice(0,8).map(r=>'<div class="hint">• '+r.roll_id+' '+(r.style_fabric||'')+(r.color?(' '+r.color):'')+'</div>').join('') +
+    (n>8?('<div class="hint">…and '+(n-8)+' more</div>'):'');
+  if(p.owner_id){ const sel=$('pl_owner'); if(sel) sel.value=p.owner_id; }
+}
+async function placement(){
+  clearMsg($('pl_msg'));
+  const palletId=$('pl_pallet').value.trim().toUpperCase();
+  const row=$('pl_row').value.trim().toUpperCase();
+  if(!/^P\d+$/.test(palletId)){show($('pl_msg'),'err','Scan or enter the pallet ID (P#####) first');return}
+  if(!row){show($('pl_msg'),'err','Scan the row sign first');return}
+  if(!plCol){show($('pl_msg'),'err','Pick the column (A–G)');return}
+  const loc=row+'-'+plCol;
+  const ownerId=$('pl_owner').value||null;
+  const today=new Date().toISOString().slice(0,10);
+  const {data:p} = await sb.from('pallets').select('pallet_id,location_code').eq('pallet_id',palletId).maybeSingle();
+  const isNew=!p;
+  let rollIds=[], from=null;
+  if(!isNew){
+    from=p.location_code||null;
+    const {data:rolls} = await sb.from('rolls').select('roll_id').eq('pallet_id',palletId);
+    rollIds=(rolls||[]).map(r=>r.roll_id);
+  }
+  const n=rollIds.length;
+
+  if($('pl_dry').checked){
+    show($('pl_msg'),'dry', isNew
+      ? ('DRY RUN — nothing saved. WOULD CREATE pallet '+palletId+' at '+loc+', date '+today+(ownerId?'':' — ⚠ no owner picked')+'. Uncheck “Dry run” to save.')
+      : ('DRY RUN — nothing saved. WOULD MOVE pallet '+palletId+(from?(' from '+from):'')+' → '+loc+', stamp date '+today+', and log a MOVE for '+n+' roll'+(n!==1?'s':'')+'. Uncheck “Dry run” to save.'));
+    return;
+  }
+  // COMMIT — location(s) first so FKs resolve
+  await sb.from('locations').upsert({location_code:loc},{onConflict:'location_code',ignoreDuplicates:true});
+  if(from) await sb.from('locations').upsert({location_code:from},{onConflict:'location_code',ignoreDuplicates:true});
+  if(isNew){
+    const {error:eIns} = await sb.from('pallets')
+      .insert({pallet_id:palletId, location_code:loc, owner_id:ownerId, status:'ACTIVE', date_placed:today});
+    if(eIns){show($('pl_msg'),'err','Create failed: '+eIns.message);return}
+    show($('pl_msg'),'ok','✓ Created pallet '+palletId+' at '+loc+'. Use the Load tab to put rolls on it.');
+  } else {
+    const {error:eP} = await sb.from('pallets')
+      .update({location_code:loc, date_placed:today, status:'ACTIVE'}).eq('pallet_id',palletId);
+    if(eP){show($('pl_msg'),'err','Placement failed: '+eP.message);return}
+    if(n>0){
+      const moves=rollIds.map(rid=>({item_kind:'ROLL', roll_id:rid, type:'MOVE',
+        qty_delta:0, from_location:from, to_location:loc, note:'Pallet '+palletId+' placed'}));
+      const {error:eM} = await sb.from('movements').insert(moves);
+      if(eM){show($('pl_msg'),'err','Pallet moved, but logging roll moves failed: '+eM.message);return}
+    }
+    show($('pl_msg'),'ok','✓ Pallet '+palletId+' placed at '+loc+' ('+n+' roll'+(n!==1?'s':'')+').');
+  }
+  $('pl_pallet').value=''; $('pl_row').value=''; plCol=null;
+  document.querySelectorAll('#pl_colgrid button').forEach(b=>b.classList.remove('sel'));
+  $('pl_dest').textContent='—'; $('pl_contents').innerHTML='';
+  await loadLocations(); await loadActivity();
+}
+
+// ---- GRID (pass 1: create location codes for an area) ----
+function gridCodes(){
+  const a=($('gd_area').value||'').trim().toUpperCase();
+  const rows=+$('gd_rows').value||0, cols=+$('gd_cols').value||0;
+  const out=[];
+  if(!a) return out;
+  for(let r=1;r<=rows;r++) for(let c=0;c<cols;c++) out.push(a+'-R'+r+'-'+String.fromCharCode(65+c));
+  return out;
+}
+function gridPreview(){
+  const codes=gridCodes();
+  $('gd_preview').textContent = codes.length
+    ? (codes.length+' locations: '+codes[0]+' … '+codes[codes.length-1])
+    : 'Enter area, rows and columns.';
+}
+async function seedGrid(){
+  clearMsg($('gd_msg'));
+  const codes=gridCodes();
+  if(!codes.length){show($('gd_msg'),'err','Enter area, rows and columns first');return}
+  const a=($('gd_area').value||'').trim().toUpperCase();
+  if($('gd_dry').checked){
+    show($('gd_msg'),'dry','DRY RUN — nothing saved. WOULD create '+codes.length+' locations: '+
+      codes[0]+' … '+codes[codes.length-1]+' (zone '+a+'). Uncheck “Dry run” to save.');
+    return;
+  }
+  const rows=codes.map(c=>({location_code:c, zone:a, type:'FLOOR'}));
+  const {error} = await sb.from('locations').upsert(rows,{onConflict:'location_code',ignoreDuplicates:true});
+  if(error){show($('gd_msg'),'err',error.message);return}
+  show($('gd_msg'),'ok','✓ '+codes.length+' locations ready for '+a+'.');
+  await loadLocations();
+}
+
+// ---- LOAD (pass 3: put rolls onto a pallet) ----
+async function loadPalletInfo(){
+  const id=$('ld_pallet').value.trim().toUpperCase();
+  const box=$('ld_info'); box.innerHTML='';
+  if(!/^P\d+$/.test(id)) return;
+  const {data:p} = await sb.from('pallets').select('pallet_id,location_code,owner_id,owners(name)').eq('pallet_id',id).maybeSingle();
+  if(!p){ box.innerHTML='<div class="hint" style="color:var(--danger)">Pallet '+id+' not found — create it in the Place tab first.</div>'; return; }
+  const {data:rolls} = await sb.from('rolls').select('roll_id').eq('pallet_id',id);
+  box.innerHTML = kv('Pallet at', p.location_code||'(no spot yet)') + kv('Owner', p.owners?p.owners.name:'—') +
+    kv('Rolls on it', (rolls||[]).length);
+  if(p.owner_id){ const sel=$('ld_owner'); if(sel) sel.value=p.owner_id; }
+}
+async function loadRoll(){
+  clearMsg($('ld_msg'));
+  const palletId=$('ld_pallet').value.trim().toUpperCase();
+  const id=$('ld_id').value.trim().toUpperCase();
+  const style=$('ld_style').value.trim();
+  const yards=parseFloat($('ld_yards').value);
+  const ownerId=$('ld_owner').value;
+  if(!/^P\d+$/.test(palletId)){show($('ld_msg'),'err','Scan the pallet first');return}
+  if(!/^R\d+$/.test(id)){show($('ld_msg'),'err','Scan the roll label (looks like R000501)');return}
+  if(!style||!yards||!ownerId){show($('ld_msg'),'err','Fabric, yards and owner are required');return}
+  const {data:p} = await sb.from('pallets').select('pallet_id,location_code').eq('pallet_id',palletId).maybeSingle();
+  if(!p){show($('ld_msg'),'err','Pallet '+palletId+' not found — create it in the Place tab first.');return}
+  const {data:exists} = await sb.from('rolls').select('roll_id').eq('roll_id',id).maybeSingle();
+  if(exists){show($('ld_msg'),'err',id+' is already in the system — grab a fresh label.');return}
+  const loc=p.location_code||null;
+  if($('ld_dry').checked){
+    show($('ld_msg'),'dry','DRY RUN — nothing saved. WOULD add roll '+id+' ('+style+', '+yards+' yd) onto pallet '+
+      palletId+(loc?(' at '+loc):' (pallet has no spot yet)')+'. Uncheck “Dry run” to save.');
+    return;
+  }
+  const {error:e1} = await sb.from('rolls').insert({
+    roll_id:id, pallet_id:palletId, style_fabric:style, color:$('ld_color').value.trim()||null, lot:$('ld_lot').value.trim()||null,
+    width_in:parseFloat($('ld_width').value)||null, vendor_tag:$('ld_vtag').value.trim()||null, owner_id:ownerId
+  });
+  if(e1){show($('ld_msg'),'err',e1.message);return}
+  const {error:e2} = await sb.from('movements').insert({
+    item_kind:'ROLL', roll_id:id, type:'RECEIVE', qty_delta:yards, to_location:loc, note:'Loaded onto pallet '+palletId
+  });
+  if(e2){show($('ld_msg'),'err','Roll saved but movement failed: '+e2.message);return}
+  show($('ld_msg'),'ok','✓ '+id+' on '+palletId+' ('+yards+' yd). Scan the next roll.');
+  ['ld_id','ld_style','ld_color','ld_lot','ld_width','ld_yards','ld_vtag'].forEach(i=>$(i).value='');
+  resetFabric('ld');
+  $('ld_id').focus();
+  await loadPalletInfo(); await loadActivity();
+}
+
 // ---- ISSUE ----
 async function issue(){
   clearMsg($('is_msg'));
@@ -410,7 +675,8 @@ async function startScan(targetId){
   try{
     if(!qr) qr=new Html5Qrcode("reader");
     await qr.start({facingMode:"environment"},{fps:10,qrbox:220},
-      txt=>{ $(scanTarget).value=String(txt).trim().toUpperCase(); stopScan(); },
+      txt=>{ const el=$(scanTarget); el.value=String(txt).trim().toUpperCase();
+             el.dispatchEvent(new Event('input')); stopScan(); },
       ()=>{});
   }catch(e){ alert("Camera unavailable. The app must be served over HTTPS for the camera to work (see deploy notes). Type the ID instead."); }
 }

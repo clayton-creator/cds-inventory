@@ -78,7 +78,7 @@
 </head>
 <body>
 <header>
-  <h1><span class="logo">Clothier</span><span class="sub">Inventory</span><span class="ver">v2026-07-08</span></h1>
+  <h1><span class="logo">Clothier</span><span class="sub">Inventory</span><span class="ver">v2026-07-08b</span></h1>
   <div style="display:flex;align-items:center;gap:12px"><a href="labels.html" style="color:inherit;font-size:13px;text-decoration:none;opacity:.85">🏷️ Labels</a><div class="who" id="who"></div></div>
 </header>
 
@@ -521,6 +521,8 @@ async function placement(){
   if(!row){show($('pl_msg'),'err','Scan the row sign first');return}
   if(!plCol){show($('pl_msg'),'err','Pick the column (A–G)');return}
   const loc=row+'-'+plCol;
+  const {data:locKnown} = await sb.from('locations').select('location_code').eq('location_code',loc).maybeSingle();
+  const locWarn = locKnown ? '' : ' ⚠ '+loc+' is NOT a seeded location — check the row scan (typos create bogus spots).';
   const ownerId=$('pl_owner').value||null;
   const today=new Date().toISOString().slice(0,10);
   const {data:p} = await sb.from('pallets').select('pallet_id,location_code').eq('pallet_id',palletId).maybeSingle();
@@ -535,8 +537,8 @@ async function placement(){
 
   if($('pl_dry').checked){
     show($('pl_msg'),'dry', isNew
-      ? ('DRY RUN — nothing saved. WOULD CREATE pallet '+palletId+' at '+loc+', date '+today+(ownerId?'':' — ⚠ no owner picked')+'. Uncheck “Dry run” to save.')
-      : ('DRY RUN — nothing saved. WOULD MOVE pallet '+palletId+(from?(' from '+from):'')+' → '+loc+', stamp date '+today+', and log a MOVE for '+n+' roll'+(n!==1?'s':'')+'. Uncheck “Dry run” to save.'));
+      ? ('DRY RUN — nothing saved. WOULD CREATE pallet '+palletId+' at '+loc+', date '+today+(ownerId?'':' — ⚠ no owner picked')+'.'+locWarn+' Uncheck “Dry run” to save.')
+      : ('DRY RUN — nothing saved. WOULD MOVE pallet '+palletId+(from?(' from '+from):'')+' → '+loc+', stamp date '+today+', and log a MOVE for '+n+' roll'+(n!==1?'s':'')+'.'+locWarn+' Uncheck “Dry run” to save.'));
     return;
   }
   // COMMIT — location(s) first so FKs resolve
@@ -546,7 +548,7 @@ async function placement(){
     const {error:eIns} = await sb.from('pallets')
       .insert({pallet_id:palletId, location_code:loc, owner_id:ownerId, status:'ACTIVE', date_placed:today});
     if(eIns){show($('pl_msg'),'err','Create failed: '+eIns.message);return}
-    show($('pl_msg'),'ok','✓ Created pallet '+palletId+' at '+loc+'. Use the Load tab to put rolls on it.');
+    show($('pl_msg'),locKnown?'ok':'dry','✓ Created pallet '+palletId+' at '+loc+'.'+locWarn+' Use the Load tab to put rolls on it.');
   } else {
     const {error:eP} = await sb.from('pallets')
       .update({location_code:loc, date_placed:today, status:'ACTIVE'}).eq('pallet_id',palletId);
@@ -557,7 +559,7 @@ async function placement(){
       const {error:eM} = await sb.from('movements').insert(moves);
       if(eM){show($('pl_msg'),'err','Pallet moved, but logging roll moves failed: '+eM.message);return}
     }
-    show($('pl_msg'),'ok','✓ Pallet '+palletId+' placed at '+loc+' ('+n+' roll'+(n!==1?'s':'')+').');
+    show($('pl_msg'),locKnown?'ok':'dry','✓ Pallet '+palletId+' placed at '+loc+' ('+n+' roll'+(n!==1?'s':'')+').'+locWarn);
   }
   $('pl_pallet').value=''; $('pl_row').value=''; plCol=null;
   document.querySelectorAll('#pl_colgrid button').forEach(b=>b.classList.remove('sel'));
